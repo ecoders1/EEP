@@ -20,7 +20,7 @@ interface FieldErrors {
 }
 
 export default function LoginPage() {
-  const { signIn, signUp, signInWithGoogle, resetPassword, continueAsGuest, loading } = useAuth();
+  const { signIn, signUp, signInWithGoogle, resetPassword, continueAsGuest, loading, session, signOut } = useAuth();
   const { isDark, toggleTheme } = useTheme();
 
   const [mode, setMode] = useState<AuthMode>("signin");
@@ -201,6 +201,25 @@ export default function LoginPage() {
   // ── Main sign in / sign up form ────────────────────────────────────────────
   return (
     <AuthShell isDark={isDark} toggleTheme={toggleTheme}>
+      {/* ── Active session warning ── */}
+      {session && (
+        <div className="flex items-start gap-3 p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/25 text-sm mb-4 animate-fade-down">
+          <span className="text-lg flex-shrink-0">⚠️</span>
+          <div className="flex-1 min-w-0">
+            <p className="font-semibold text-amber-400 text-sm">Active session detected</p>
+            <p className="text-foreground/60 text-xs mt-0.5 truncate">
+              Signed in as <span className="font-mono">{session.user.email}</span>
+            </p>
+          </div>
+          <button
+            onClick={async () => { await signOut(); }}
+            className="flex-shrink-0 text-xs font-bold text-amber-400 hover:text-amber-300 underline transition-colors"
+          >
+            Sign out
+          </button>
+        </div>
+      )}
+
       {/* Mode tabs */}
       <div className="flex rounded-xl overflow-hidden mb-6 bg-white/5 border border-white/10 p-1">
         {(["signin", "signup"] as const).map((m) => (

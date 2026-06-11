@@ -12,11 +12,9 @@ export default function Home() {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[#0a0a1a]">
         <div className="flex flex-col items-center gap-4">
-          {/* Logo mark */}
           <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-violet-600 to-indigo-600 flex items-center justify-center text-white text-xl font-black shadow-2xl shadow-violet-500/30 animate-pulse">
             EE
           </div>
-          {/* Spinner */}
           <div className="flex gap-1.5">
             {[0, 1, 2].map((i) => (
               <div
@@ -26,7 +24,7 @@ export default function Home() {
               />
             ))}
           </div>
-          <p className="text-white/30 text-xs">Exit Exam Ethiopia</p>
+          <p className="text-white/30 text-xs">Checking session…</p>
         </div>
       </div>
     );

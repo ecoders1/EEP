@@ -1,6 +1,6 @@
 "use client";
 
-import React, { createContext, useContext, useEffect, useState, useCallback } from "react";
+import React, { createContext, useContext, useEffect, useState, useCallback, useRef } from "react";
 import { supabase, mapAuthError } from "@/lib/supabase";
 import type { Session, User as SupabaseUser } from "@supabase/supabase-js";
 
@@ -23,26 +23,15 @@ interface AuthContextType {
   session: Session | null;
   loading: boolean;
   initializing: boolean;
-  // Sign in
   signIn: (email: string, password: string) => Promise<{ error: string | null }>;
-  // Sign up
-  signUp: (
-    email: string,
-    password: string,
-    fullName: string
-  ) => Promise<{ error: string | null; needsConfirmation: boolean }>;
-  // OAuth
+  signUp: (email: string, password: string, fullName: string) => Promise<{ error: string | null; needsConfirmation: boolean }>;
   signInWithGoogle: () => Promise<{ error: string | null }>;
-  // Password reset
   resetPassword: (email: string) => Promise<{ error: string | null }>;
-  // Guest
   continueAsGuest: () => void;
-  // Sign out
   signOut: () => Promise<void>;
   isAuthenticated: boolean;
 }
 
-// ─── Context ──────────────────────────────────────────────────────────────────
 const AuthContext = createContext<AuthContextType>({
   user: null,
   session: null,
@@ -57,117 +46,141 @@ const AuthContext = createContext<AuthContextType>({
   isAuthenticated: false,
 });
 
-// ─── Map Supabase user → AppUser ──────────────────────────────────────────────
 function mapUser(supabaseUser: SupabaseUser): AppUser {
   const meta = supabaseUser.user_metadata ?? {};
   return {
     id: supabaseUser.id,
-    name:
-      meta.full_name ||
-      meta.name ||
-      supabaseUser.email?.split("@")[0] ||
-      "Student",
+    name: meta.full_name || meta.name || supabaseUser.email?.split("@")[0] || "Student",
     email: supabaseUser.email ?? "",
     avatar: meta.avatar_url || meta.picture || undefined,
     university: meta.university || undefined,
     department: meta.department || undefined,
     year: meta.year_of_study ? Number(meta.year_of_study) : undefined,
     gpa: meta.gpa ? Number(meta.gpa) : undefined,
+    // Only consider email confirmed if email_confirmed_at exists
     emailConfirmed: !!supabaseUser.email_confirmed_at,
     isGuest: false,
   };
 }
 
-// ─── Provider ────────────────────────────────────────────────────────────────
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AppUser | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(false);
+  // initializing stays true until we've checked localStorage for an existing session
   const [initializing, setInitializing] = useState(true);
+  // Track whether the first session check has resolved
+  const sessionChecked = useRef(false);
 
-  // Restore session on mount + listen for changes
   useEffect(() => {
-    // Get initial session
+    // STEP 1 — read whatever Supabase stored in localStorage synchronously
     supabase.auth.getSession().then(({ data: { session: s } }) => {
-      setSession(s);
-      setUser(s?.user ? mapUser(s.user) : null);
+      // Only accept a real Supabase session (not guest — guests are never persisted)
+      if (s?.user) {
+        setSession(s);
+        setUser(mapUser(s.user));
+      } else {
+        // No stored session → user must log in
+        setSession(null);
+        setUser(null);
+      }
+      sessionChecked.current = true;
       setInitializing(false);
     });
 
-    // Listen to auth state changes (login, logout, token refresh)
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, s) => {
-      setSession(s);
-      setUser(s?.user ? mapUser(s.user) : null);
-      setInitializing(false);
+    // STEP 2 — keep listening for future auth changes (login, logout, token refresh, OAuth redirect)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, s) => {
+      // Ignore the initial INITIAL_SESSION event if getSession hasn't resolved yet
+      // to avoid a double-set race — we handle INITIAL_SESSION via getSession above.
+      if (event === "INITIAL_SESSION") return;
+
+      if (s?.user) {
+        setSession(s);
+        setUser(mapUser(s.user));
+      } else {
+        // SIGNED_OUT or token expired
+        setSession(null);
+        setUser(null);
+      }
+
+      // If we were still initializing and an event comes in, unblock
+      if (!sessionChecked.current) {
+        sessionChecked.current = true;
+        setInitializing(false);
+      }
     });
 
     return () => subscription.unsubscribe();
   }, []);
 
-  // ── Sign In ────────────────────────────────────────────────────────────────
-  const signIn = useCallback(
-    async (email: string, password: string): Promise<{ error: string | null }> => {
-      setLoading(true);
-      try {
-        const { error } = await supabase.auth.signInWithPassword({
-          email: email.trim().toLowerCase(),
-          password,
-        });
-        if (error) return { error: mapAuthError(error.message) };
-        return { error: null };
-      } catch {
-        return { error: "Something went wrong. Please try again." };
-      } finally {
-        setLoading(false);
+  // ── Sign In — requires real Supabase credentials ───────────────────────────
+  const signIn = useCallback(async (email: string, password: string): Promise<{ error: string | null }> => {
+    setLoading(true);
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: email.trim().toLowerCase(),
+        password,
+      });
+      if (error) return { error: mapAuthError(error.message) };
+
+      // Extra guard: block unconfirmed emails from accessing the app
+      if (data.user && !data.user.email_confirmed_at) {
+        // Sign them back out immediately
+        await supabase.auth.signOut();
+        return {
+          error: "Please confirm your email before signing in. Check your inbox for the verification link.",
+        };
       }
-    },
-    []
-  );
+
+      return { error: null };
+    } catch {
+      return { error: "Something went wrong. Please try again." };
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   // ── Sign Up ────────────────────────────────────────────────────────────────
-  const signUp = useCallback(
-    async (
-      email: string,
-      password: string,
-      fullName: string
-    ): Promise<{ error: string | null; needsConfirmation: boolean }> => {
-      setLoading(true);
-      try {
-        const { data, error } = await supabase.auth.signUp({
-          email: email.trim().toLowerCase(),
-          password,
-          options: {
-            data: {
-              full_name: fullName.trim(),
-            },
-            emailRedirectTo: `${window.location.origin}/auth/confirm`,
-          },
-        });
+  const signUp = useCallback(async (
+    email: string,
+    password: string,
+    fullName: string,
+  ): Promise<{ error: string | null; needsConfirmation: boolean }> => {
+    setLoading(true);
+    try {
+      const { data, error } = await supabase.auth.signUp({
+        email: email.trim().toLowerCase(),
+        password,
+        options: {
+          data: { full_name: fullName.trim() },
+          emailRedirectTo: `${window.location.origin}/auth/confirm`,
+        },
+      });
 
-        if (error) return { error: mapAuthError(error.message), needsConfirmation: false };
+      if (error) return { error: mapAuthError(error.message), needsConfirmation: false };
 
-        // Supabase returns a user even if email confirmation is required
-        // If identities is empty, the email already exists
-        if (data.user && data.user.identities && data.user.identities.length === 0) {
-          return {
-            error: "An account with this email already exists. Sign in instead.",
-            needsConfirmation: false,
-          };
-        }
-
-        // Check if confirmation email was sent (session is null when confirmation required)
-        const needsConfirmation = !data.session;
-        return { error: null, needsConfirmation };
-      } catch {
-        return { error: "Something went wrong. Please try again.", needsConfirmation: false };
-      } finally {
-        setLoading(false);
+      // Empty identities = this email is already registered
+      if (data.user?.identities?.length === 0) {
+        return { error: "An account with this email already exists. Sign in instead.", needsConfirmation: false };
       }
-    },
-    []
-  );
+
+      // session is null = email confirmation required (Supabase project has confirm emails ON)
+      // session exists  = auto-confirmed (confirm emails OFF in Supabase settings)
+      const needsConfirmation = !data.session;
+
+      // If auto-confirmed, the onAuthStateChange listener will pick up the session.
+      // If confirmation required, sign them out to prevent auto-login with unconfirmed email.
+      if (needsConfirmation) {
+        await supabase.auth.signOut();
+      }
+
+      return { error: null, needsConfirmation };
+    } catch {
+      return { error: "Something went wrong. Please try again.", needsConfirmation: false };
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   // ── Google OAuth ───────────────────────────────────────────────────────────
   const signInWithGoogle = useCallback(async (): Promise<{ error: string | null }> => {
@@ -182,10 +195,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       });
       if (error) return { error: mapAuthError(error.message) };
       return { error: null };
+      // Page will redirect to Google — no need to setLoading(false), the page navigates away
     } catch {
-      return { error: "Google sign-in failed. Please try again." };
-    } finally {
       setLoading(false);
+      return { error: "Google sign-in failed. Please try again." };
     }
   }, []);
 
@@ -195,7 +208,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       const { error } = await supabase.auth.resetPasswordForEmail(
         email.trim().toLowerCase(),
-        { redirectTo: `${window.location.origin}/auth/reset-password` }
+        { redirectTo: `${window.location.origin}/auth/reset-password` },
       );
       if (error) return { error: mapAuthError(error.message) };
       return { error: null };
@@ -206,8 +219,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
-  // ── Guest ──────────────────────────────────────────────────────────────────
+  // ── Guest — purely local, never touches Supabase ──────────────────────────
   const continueAsGuest = useCallback(() => {
+    // Guest state lives only in memory — it is NOT persisted to localStorage.
+    // Refreshing the page will require sign-in again, as expected.
     setUser({
       id: "guest",
       name: "Guest User",
@@ -218,32 +233,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   // ── Sign Out ───────────────────────────────────────────────────────────────
   const signOut = useCallback(async () => {
-    // If guest, just clear local state
     if (user?.isGuest) {
+      // Guest: just clear local state — nothing to sign out from Supabase
       setUser(null);
       return;
     }
     await supabase.auth.signOut();
-    setUser(null);
-    setSession(null);
+    // onAuthStateChange will fire and clear user/session state
   }, [user]);
 
+  // isAuthenticated is true for both real users AND guests.
+  // Use user.isGuest inside components to restrict premium features.
+  const isAuthenticated = !!user;
+
   return (
-    <AuthContext.Provider
-      value={{
-        user,
-        session,
-        loading,
-        initializing,
-        signIn,
-        signUp,
-        signInWithGoogle,
-        resetPassword,
-        continueAsGuest,
-        signOut,
-        isAuthenticated: !!user,
-      }}
-    >
+    <AuthContext.Provider value={{
+      user, session, loading, initializing,
+      signIn, signUp, signInWithGoogle, resetPassword,
+      continueAsGuest, signOut, isAuthenticated,
+    }}>
       {children}
     </AuthContext.Provider>
   );
