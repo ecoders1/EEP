@@ -544,7 +544,20 @@ function NotificationsPanel({ notifications, onClose, isDark }: {
           </div>
         </div>
         <div className="p-2">
-          {notifications.map((n) => (
+          {notifications.map((n) => {
+            const notifBg: Record<string, string> = {
+              success: "bg-emerald-500/20",
+              warning: "bg-amber-500/20",
+              error: "bg-red-500/20",
+              info: "bg-blue-500/20",
+            };
+            const notifEmoji: Record<string, string> = {
+              success: "✅",
+              warning: "⚠️",
+              error: "🚨",
+              info: "ℹ️",
+            };
+            return (
             <div
               key={n.id}
               className={cn(
@@ -554,11 +567,9 @@ function NotificationsPanel({ notifications, onClose, isDark }: {
             >
               <div className={cn(
                 "w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 text-sm",
-                n.type === "success" ? "bg-emerald-500/20" :
-                n.type === "warning" ? "bg-amber-500/20" :
-                n.type === "error" ? "bg-red-500/20" : "bg-blue-500/20"
+                notifBg[n.type] ?? "bg-blue-500/20"
               )}>
-                {n.type === "success" ? "✅" : n.type === "warning" ? "⚠️" : "ℹ️"}
+                {notifEmoji[n.type] ?? "ℹ️"}
               </div>
               <div className="flex-1 min-w-0">
                 <div className="flex items-start justify-between gap-1">
@@ -569,7 +580,8 @@ function NotificationsPanel({ notifications, onClose, isDark }: {
                 <p className="text-xs text-foreground/30 mt-1">{n.time}</p>
               </div>
             </div>
-          ))}
+            );
+          })}
         </div>
       </div>
     </>

@@ -4,6 +4,7 @@ import { cn } from "@/lib/utils";
 interface CardProps {
   children: React.ReactNode;
   className?: string;
+  style?: React.CSSProperties;
   hover?: boolean;
   onClick?: () => void;
   padding?: "none" | "sm" | "md" | "lg";
@@ -13,6 +14,7 @@ interface CardProps {
 export function Card({
   children,
   className,
+  style,
   hover = false,
   onClick,
   padding = "md",
@@ -34,6 +36,7 @@ export function Card({
   return (
     <div
       onClick={onClick}
+      style={style}
       className={cn(
         variants[variant],
         paddings[padding],
