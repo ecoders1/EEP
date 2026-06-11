@@ -1,0 +1,741 @@
+"use client";
+
+import React, { useState } from "react";
+import { useAuth } from "@/contexts/AuthContext";
+import { useTheme } from "@/contexts/ThemeContext";
+import { Card } from "@/components/ui/Card";
+import { Badge } from "@/components/ui/Badge";
+import { Avatar } from "@/components/ui/Avatar";
+import { ProgressBar } from "@/components/ui/ProgressBar";
+import { Button } from "@/components/ui/Button";
+import { cn } from "@/lib/utils";
+
+// ─── Mock data ────────────────────────────────────────────────────────────────
+const DEPARTMENTS = [
+  { id: "cs", name: "Computer Science", faculty: "Engineering", icon: "💻", exams: 24, students: 4820, passRate: 78, color: "from-violet-600 to-indigo-600" },
+  { id: "med", name: "Medicine", faculty: "Health Sciences", icon: "🏥", exams: 32, students: 6100, passRate: 72, color: "from-rose-600 to-pink-600" },
+  { id: "eng", name: "Electrical Engineering", faculty: "Engineering", icon: "⚡", exams: 28, students: 3950, passRate: 75, color: "from-amber-600 to-orange-600" },
+  { id: "law", name: "Law", faculty: "Law", icon: "⚖️", exams: 20, students: 5200, passRate: 68, color: "from-emerald-600 to-teal-600" },
+  { id: "acc", name: "Accounting", faculty: "Business", icon: "📊", exams: 22, students: 7300, passRate: 82, color: "from-blue-600 to-cyan-600" },
+  { id: "arch", name: "Architecture", faculty: "Engineering", icon: "🏛️", exams: 18, students: 2100, passRate: 70, color: "from-purple-600 to-violet-600" },
+  { id: "agri", name: "Agriculture", faculty: "Natural Sciences", icon: "🌾", exams: 16, students: 4400, passRate: 80, color: "from-lime-600 to-green-600" },
+  { id: "phy", name: "Physics", faculty: "Natural Sciences", icon: "⚛️", exams: 14, students: 1800, passRate: 65, color: "from-cyan-600 to-sky-600" },
+];
+
+const RECENT_EXAMS = [
+  { id: "e1", dept: "Computer Science", title: "Data Structures & Algorithms", year: 2023, score: 88, maxScore: 100, date: "Jun 2, 2024", duration: "3h", difficulty: "Hard" as const },
+  { id: "e2", dept: "Computer Science", title: "Database Management Systems", year: 2022, score: 75, maxScore: 100, date: "May 28, 2024", duration: "2.5h", difficulty: "Medium" as const },
+  { id: "e3", dept: "Computer Science", title: "Software Engineering", year: 2023, score: 92, maxScore: 100, date: "May 20, 2024", duration: "3h", difficulty: "Medium" as const },
+];
+
+const NOTIFICATIONS = [
+  { id: "n1", type: "info" as const, title: "New Exam Added", msg: "2024 Civil Engineering exit exam is now available.", time: "2m ago", unread: true },
+  { id: "n2", type: "success" as const, title: "Score Updated", msg: "Your Data Structures exam score has been published.", time: "1h ago", unread: true },
+  { id: "n3", type: "warning" as const, title: "Exam Reminder", msg: "Mock exam session starts in 2 days.", time: "3h ago", unread: false },
+  { id: "n4", type: "info" as const, title: "System Update", msg: "New practice questions added for Medicine.", time: "1d ago", unread: false },
+];
+
+const STATS = [
+  { label: "Exams Taken", value: 12, icon: "📝", color: "from-violet-500 to-indigo-500", change: "+3 this month" },
+  { label: "Avg Score", value: "82%", icon: "🎯", color: "from-emerald-500 to-teal-500", change: "+5% vs last month" },
+  { label: "Study Hours", value: 148, icon: "⏱️", color: "from-amber-500 to-orange-500", change: "+12h this week" },
+  { label: "Rank", value: "#47", icon: "🏆", color: "from-rose-500 to-pink-500", change: "Top 5%" },
+];
+
+type View = "dashboard" | "departments" | "notifications" | "profile";
+
+export default function DashboardPage() {
+  const { user, logout } = useAuth();
+  const { isDark, toggleTheme } = useTheme();
+  const [activeView, setActiveView] = useState<View>("dashboard");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [showNotifications, setShowNotifications] = useState(false);
+  const [showProfile, setShowProfile] = useState(false);
+
+  const unreadCount = NOTIFICATIONS.filter((n) => n.unread).length;
+
+  const filteredDepts = DEPARTMENTS.filter((d) =>
+    d.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    d.faculty.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  return (
+    <div className={cn("min-h-screen", isDark ? "dark bg-[#0a0a1a]" : "bg-slate-50")}>
+      {/* Ethiopian flag accent top */}
+      <div className="fixed top-0 left-0 right-0 z-50 flex h-1">
+        <div className="flex-1 bg-ethiopia-green" />
+        <div className="flex-1 bg-ethiopia-yellow" />
+        <div className="flex-1 bg-ethiopia-red" />
+      </div>
+
+      {/* Top Navigation Bar */}
+      <header className={cn(
+        "fixed top-1 left-0 right-0 z-40 px-4 py-3",
+        isDark ? "bg-[#0a0a1a]/80" : "bg-white/80",
+        "backdrop-blur-xl border-b",
+        isDark ? "border-white/5" : "border-gray-200/80"
+      )}>
+        <div className="max-w-6xl mx-auto flex items-center justify-between gap-4">
+          {/* Logo */}
+          <div className="flex items-center gap-2.5 flex-shrink-0">
+            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-violet-600 to-indigo-600 flex items-center justify-center text-white text-sm font-bold shadow-lg shadow-violet-500/25">
+              EE
+            </div>
+            <div className="hidden sm:block">
+              <p className="text-sm font-bold text-foreground leading-tight">Exit Exam</p>
+              <p className="text-xs text-foreground/50 leading-tight">Ethiopia</p>
+            </div>
+          </div>
+
+          {/* Search bar */}
+          <div className="flex-1 max-w-sm hidden md:block">
+            <div className={cn(
+              "flex items-center gap-2.5 h-10 px-3.5 rounded-xl",
+              "glass-card border transition-all duration-200",
+              "focus-within:ring-2 focus-within:ring-violet-500/50"
+            )}>
+              <SearchIcon />
+              <input
+                type="text"
+                placeholder="Search departments, exams..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="flex-1 text-sm bg-transparent outline-none text-foreground placeholder:text-foreground/30"
+              />
+              {searchQuery && (
+                <button onClick={() => setSearchQuery("")} className="text-foreground/40 hover:text-foreground/70">
+                  <XIcon />
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Right controls */}
+          <div className="flex items-center gap-2">
+            {/* Theme toggle */}
+            <button
+              onClick={toggleTheme}
+              className="p-2 rounded-xl glass-card text-foreground/60 hover:text-foreground transition-colors"
+            >
+              {isDark ? <SunIcon /> : <MoonIcon />}
+            </button>
+
+            {/* Notifications */}
+            <button
+              onClick={() => setShowNotifications(!showNotifications)}
+              className="relative p-2 rounded-xl glass-card text-foreground/60 hover:text-foreground transition-colors"
+            >
+              <BellIcon />
+              {unreadCount > 0 && (
+                <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full text-[10px] text-white font-bold flex items-center justify-center badge-pulse">
+                  {unreadCount}
+                </span>
+              )}
+            </button>
+
+            {/* Profile */}
+            <button onClick={() => setShowProfile(!showProfile)} className="flex items-center gap-2">
+              <Avatar name={user?.name || "User"} size="sm" online={true} />
+              <span className="hidden sm:block text-sm font-medium text-foreground/80 max-w-[100px] truncate">
+                {user?.name?.split(" ")[0]}
+              </span>
+            </button>
+          </div>
+        </div>
+      </header>
+
+      {/* Notifications panel */}
+      {showNotifications && (
+        <NotificationsPanel
+          notifications={NOTIFICATIONS}
+          onClose={() => setShowNotifications(false)}
+          isDark={isDark}
+        />
+      )}
+
+      {/* Profile dropdown */}
+      {showProfile && (
+        <ProfileDropdown user={user} onClose={() => setShowProfile(false)} onLogout={logout} isDark={isDark} />
+      )}
+
+      {/* Main content */}
+      <main className="pt-20 pb-24 md:pb-8 px-4">
+        <div className="max-w-6xl mx-auto">
+
+          {/* Welcome Hero */}
+          <div className="relative rounded-3xl overflow-hidden mb-8 mt-4">
+            <div className={cn("p-6 md:p-8", isDark ? "animated-gradient" : "bg-gradient-to-r from-violet-600 to-indigo-600")}>
+              {/* Decorative circles */}
+              <div className="absolute top-0 right-0 w-64 h-64 rounded-full bg-white/5 -translate-y-32 translate-x-32" />
+              <div className="absolute bottom-0 left-32 w-48 h-48 rounded-full bg-white/5 translate-y-24" />
+
+              <div className="relative z-10 flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
+                <div>
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="text-2xl">👋</span>
+                    <Badge variant="gold" size="md">
+                      {user?.isGuest ? "Guest" : `Year ${user?.year || 4}`}
+                    </Badge>
+                  </div>
+                  <h2 className="text-2xl md:text-3xl font-extrabold text-white mb-1">
+                    Welcome back, {user?.name?.split(" ")[0] || "Student"}!
+                  </h2>
+                  <p className="text-white/70 text-sm">
+                    {user?.university || "Addis Ababa University"} · {user?.department || "Computer Science"}
+                  </p>
+                  {!user?.isGuest && (
+                    <div className="flex items-center gap-4 mt-4">
+                      <div className="text-center">
+                        <p className="text-2xl font-bold text-white">{user?.gpa || "3.75"}</p>
+                        <p className="text-white/60 text-xs">GPA</p>
+                      </div>
+                      <div className="w-px h-10 bg-white/20" />
+                      <div className="text-center">
+                        <p className="text-2xl font-bold text-white">82%</p>
+                        <p className="text-white/60 text-xs">Avg Score</p>
+                      </div>
+                      <div className="w-px h-10 bg-white/20" />
+                      <div className="text-center">
+                        <p className="text-2xl font-bold text-white">12</p>
+                        <p className="text-white/60 text-xs">Exams</p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+                <div className="flex flex-col gap-3">
+                  <Button
+                    variant="glass"
+                    size="md"
+                    className="text-white border-white/30 hover:bg-white/20 min-w-[160px]"
+                    icon={<PlayIcon />}
+                  >
+                    Start Practice
+                  </Button>
+                  <Button
+                    variant="glass"
+                    size="md"
+                    className="text-white border-white/30 hover:bg-white/20"
+                    icon={<BookIcon />}
+                  >
+                    Browse Exams
+                  </Button>
+                </div>
+              </div>
+
+              {/* Progress section */}
+              {!user?.isGuest && (
+                <div className="relative z-10 mt-6 pt-5 border-t border-white/15">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-white/80 text-sm font-medium">Exam Readiness</span>
+                    <span className="text-white font-bold text-sm">78%</span>
+                  </div>
+                  <div className="w-full bg-white/20 rounded-full h-2.5">
+                    <div className="bg-white rounded-full h-2.5 transition-all duration-1000" style={{ width: "78%" }} />
+                  </div>
+                  <p className="text-white/50 text-xs mt-1.5">Complete 5 more practice sessions to reach 90%</p>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Mobile search */}
+          <div className="md:hidden mb-6">
+            <div className={cn(
+              "flex items-center gap-2.5 h-11 px-3.5 rounded-xl glass-card",
+              "focus-within:ring-2 focus-within:ring-violet-500/50"
+            )}>
+              <SearchIcon />
+              <input
+                type="text"
+                placeholder="Search departments..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="flex-1 text-sm bg-transparent outline-none text-foreground placeholder:text-foreground/30"
+              />
+            </div>
+          </div>
+
+          {/* Stats grid */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+            {STATS.map((stat, i) => (
+              <Card key={i} className="animate-fade-up" style={{ animationDelay: `${i * 0.05}s` } as React.CSSProperties} hover>
+                <div className={cn("w-10 h-10 rounded-xl bg-gradient-to-br flex items-center justify-center text-xl mb-3", stat.color)}>
+                  {stat.icon}
+                </div>
+                <p className="text-2xl font-extrabold text-foreground">{stat.value}</p>
+                <p className="text-sm font-medium text-foreground/70">{stat.label}</p>
+                <p className="text-xs text-emerald-500 mt-1">{stat.change}</p>
+              </Card>
+            ))}
+          </div>
+
+          {/* Content grid */}
+          <div className="grid lg:grid-cols-3 gap-6">
+            {/* Left: Departments + Recent Exams */}
+            <div className="lg:col-span-2 space-y-6">
+              {/* Featured Departments */}
+              <section>
+                <div className="flex items-center justify-between mb-4">
+                  <div>
+                    <h3 className="text-lg font-bold text-foreground">Departments</h3>
+                    <p className="text-sm text-foreground/50">Browse by faculty & discipline</p>
+                  </div>
+                  <button className="text-sm text-violet-400 hover:text-violet-300 font-medium transition-colors">
+                    View all →
+                  </button>
+                </div>
+
+                {searchQuery && (
+                  <p className="text-sm text-foreground/50 mb-3">
+                    {filteredDepts.length} result{filteredDepts.length !== 1 ? "s" : ""} for &quot;{searchQuery}&quot;
+                  </p>
+                )}
+
+                <div className="grid sm:grid-cols-2 gap-3">
+                  {(searchQuery ? filteredDepts : DEPARTMENTS.slice(0, 6)).map((dept, i) => (
+                    <DepartmentCard key={dept.id} dept={dept} delay={i * 0.04} />
+                  ))}
+                </div>
+              </section>
+
+              {/* Recent Exams */}
+              <section>
+                <div className="flex items-center justify-between mb-4">
+                  <div>
+                    <h3 className="text-lg font-bold text-foreground">Recent Exams</h3>
+                    <p className="text-sm text-foreground/50">Your latest practice attempts</p>
+                  </div>
+                  <button className="text-sm text-violet-400 hover:text-violet-300 font-medium transition-colors">
+                    View all →
+                  </button>
+                </div>
+
+                <div className="space-y-3">
+                  {RECENT_EXAMS.map((exam, i) => (
+                    <RecentExamCard key={exam.id} exam={exam} delay={i * 0.05} />
+                  ))}
+                </div>
+              </section>
+            </div>
+
+            {/* Right sidebar */}
+            <div className="space-y-6">
+              {/* Student Profile Card */}
+              <StudentProfileCard user={user} />
+
+              {/* Quick Stats */}
+              <ProgressStatsCard />
+
+              {/* Quick Links */}
+              <QuickLinksCard />
+            </div>
+          </div>
+        </div>
+      </main>
+
+      {/* Mobile bottom navigation */}
+      <MobileBottomNav activeView={activeView} setActiveView={setActiveView} unreadCount={unreadCount} />
+    </div>
+  );
+}
+
+// ─── Department Card ─────────────────────────────────────────────────────────
+function DepartmentCard({ dept, delay }: { dept: typeof DEPARTMENTS[0]; delay: number }) {
+  return (
+    <div
+      className="glass-card rounded-2xl p-4 card-hover cursor-pointer animate-fade-up group"
+      style={{ animationDelay: `${delay}s` }}
+    >
+      <div className="flex items-start gap-3">
+        <div className={cn("w-12 h-12 rounded-xl bg-gradient-to-br flex items-center justify-center text-2xl flex-shrink-0 shadow-lg group-hover:scale-110 transition-transform duration-200", dept.color)}>
+          {dept.icon}
+        </div>
+        <div className="flex-1 min-w-0">
+          <h4 className="font-semibold text-foreground text-sm truncate group-hover:text-violet-400 transition-colors">{dept.name}</h4>
+          <p className="text-xs text-foreground/50 mb-2">{dept.faculty}</p>
+          <div className="flex items-center gap-3 text-xs text-foreground/60">
+            <span>📝 {dept.exams} exams</span>
+            <span>👥 {(dept.students / 1000).toFixed(1)}K</span>
+          </div>
+          <div className="mt-2">
+            <ProgressBar value={dept.passRate} size="sm" color={dept.passRate >= 75 ? "emerald" : dept.passRate >= 65 ? "amber" : "rose"} animated={false} />
+            <p className="text-xs text-foreground/40 mt-1">{dept.passRate}% pass rate</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Recent Exam Card ─────────────────────────────────────────────────────────
+function RecentExamCard({ exam, delay }: { exam: typeof RECENT_EXAMS[0]; delay: number }) {
+  const pct = Math.round((exam.score / exam.maxScore) * 100);
+  const color = pct >= 85 ? "emerald" : pct >= 70 ? "blue" : pct >= 50 ? "amber" : "rose";
+  const diffColors = { Easy: "success", Medium: "info", Hard: "error" } as const;
+
+  return (
+    <div
+      className="glass-card rounded-2xl p-4 card-hover cursor-pointer animate-fade-up flex items-center gap-4"
+      style={{ animationDelay: `${delay}s` }}
+    >
+      <div className={cn(
+        "w-14 h-14 rounded-xl flex items-center justify-center flex-shrink-0 font-bold text-lg",
+        pct >= 85 ? "bg-emerald-500/20 text-emerald-400" :
+        pct >= 70 ? "bg-blue-500/20 text-blue-400" :
+        pct >= 50 ? "bg-amber-500/20 text-amber-400" :
+        "bg-red-500/20 text-red-400"
+      )}>
+        {pct}%
+      </div>
+      <div className="flex-1 min-w-0">
+        <div className="flex items-start justify-between gap-2">
+          <div>
+            <h4 className="font-semibold text-foreground text-sm truncate">{exam.title}</h4>
+            <p className="text-xs text-foreground/50">{exam.dept} · {exam.year}</p>
+          </div>
+          <Badge variant={diffColors[exam.difficulty]} size="sm">{exam.difficulty}</Badge>
+        </div>
+        <div className="mt-2">
+          <ProgressBar value={exam.score} max={exam.maxScore} size="sm" color={color} animated={false} />
+          <div className="flex items-center justify-between mt-1">
+            <span className="text-xs text-foreground/40">{exam.score}/{exam.maxScore} marks</span>
+            <span className="text-xs text-foreground/40">{exam.date}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Student Profile Card ─────────────────────────────────────────────────────
+function StudentProfileCard({ user }: { user: ReturnType<typeof useAuth>["user"] }) {
+  if (!user) return null;
+  return (
+    <Card className="text-center">
+      <div className="flex flex-col items-center">
+        <div className="relative mb-3">
+          <Avatar name={user.name} size="xl" online={true} />
+          {!user.isGuest && (
+            <div className="absolute -bottom-1 -right-1 w-7 h-7 bg-amber-500 rounded-full flex items-center justify-center text-xs text-white font-bold shadow-md">
+              ★
+            </div>
+          )}
+        </div>
+        <h4 className="font-bold text-foreground text-base">{user.name}</h4>
+        <p className="text-xs text-foreground/50 mt-0.5">{user.email}</p>
+        {!user.isGuest && (
+          <>
+            <div className="flex items-center gap-1.5 mt-2">
+              <Badge variant="default" size="sm">Year {user.year || 4}</Badge>
+              <Badge variant="info" size="sm">{user.department?.split(" ")[0]}</Badge>
+            </div>
+            <div className="w-full mt-4 pt-4 border-t border-white/10 grid grid-cols-2 gap-3">
+              <div className="text-center">
+                <p className="text-xl font-extrabold text-foreground">{user.gpa}</p>
+                <p className="text-xs text-foreground/50">GPA</p>
+              </div>
+              <div className="text-center">
+                <p className="text-xl font-extrabold text-foreground">82%</p>
+                <p className="text-xs text-foreground/50">Avg Score</p>
+              </div>
+            </div>
+            <button className="mt-4 w-full py-2 text-sm font-medium text-violet-400 border border-violet-500/30 rounded-xl hover:bg-violet-500/10 transition-colors">
+              Edit Profile
+            </button>
+          </>
+        )}
+        {user.isGuest && (
+          <div className="mt-4 w-full">
+            <Badge variant="warning" size="md" dot className="w-full justify-center">Guest Mode - Limited Access</Badge>
+            <button className="mt-3 w-full py-2 text-sm font-medium text-white bg-gradient-to-r from-violet-600 to-indigo-600 rounded-xl hover:opacity-90 transition-opacity">
+              Create Free Account
+            </button>
+          </div>
+        )}
+      </div>
+    </Card>
+  );
+}
+
+// ─── Progress Stats Card ──────────────────────────────────────────────────────
+function ProgressStatsCard() {
+  const subjects = [
+    { name: "Data Structures", progress: 88, color: "violet" as const },
+    { name: "Networks", progress: 65, color: "blue" as const },
+    { name: "OS Concepts", progress: 74, color: "emerald" as const },
+    { name: "Database", progress: 92, color: "amber" as const },
+  ];
+
+  return (
+    <Card>
+      <div className="flex items-center justify-between mb-4">
+        <h4 className="font-bold text-foreground">Subject Progress</h4>
+        <Badge variant="success" dot size="sm">On Track</Badge>
+      </div>
+      <div className="space-y-4">
+        {subjects.map((s) => (
+          <div key={s.name}>
+            <div className="flex justify-between mb-1.5">
+              <span className="text-sm text-foreground/70">{s.name}</span>
+              <span className="text-sm font-semibold text-foreground">{s.progress}%</span>
+            </div>
+            <ProgressBar value={s.progress} size="sm" color={s.color} />
+          </div>
+        ))}
+      </div>
+    </Card>
+  );
+}
+
+// ─── Quick Links Card ─────────────────────────────────────────────────────────
+function QuickLinksCard() {
+  const links = [
+    { icon: "📚", label: "Study Materials", sub: "800+ resources" },
+    { icon: "🧠", label: "AI Tutor", sub: "Ask anything", badge: "New" },
+    { icon: "📊", label: "Analytics", sub: "Your insights" },
+    { icon: "🏆", label: "Leaderboard", sub: "Top students" },
+  ];
+
+  return (
+    <Card>
+      <h4 className="font-bold text-foreground mb-3">Quick Access</h4>
+      <div className="space-y-2">
+        {links.map((l) => (
+          <button
+            key={l.label}
+            className="w-full flex items-center gap-3 p-2.5 rounded-xl hover:bg-white/5 dark:hover:bg-white/5 transition-colors text-left group"
+          >
+            <span className="text-xl">{l.icon}</span>
+            <div className="flex-1">
+              <p className="text-sm font-medium text-foreground group-hover:text-violet-400 transition-colors">{l.label}</p>
+              <p className="text-xs text-foreground/40">{l.sub}</p>
+            </div>
+            {l.badge && (
+              <Badge variant="success" size="sm">{l.badge}</Badge>
+            )}
+            <ChevronIcon />
+          </button>
+        ))}
+      </div>
+    </Card>
+  );
+}
+
+// ─── Notifications Panel ──────────────────────────────────────────────────────
+function NotificationsPanel({ notifications, onClose, isDark }: {
+  notifications: typeof NOTIFICATIONS;
+  onClose: () => void;
+  isDark: boolean;
+}) {
+  return (
+    <>
+      <div className="fixed inset-0 z-40" onClick={onClose} />
+      <div className={cn(
+        "fixed top-16 right-4 z-50 w-80 max-h-96 overflow-y-auto",
+        "glass-card rounded-2xl shadow-2xl animate-fade-down",
+        isDark ? "bg-[#12122a]/95" : "bg-white/95"
+      )}>
+        <div className="p-4 border-b border-white/10">
+          <div className="flex items-center justify-between">
+            <h4 className="font-bold text-foreground">Notifications</h4>
+            <button onClick={onClose} className="text-foreground/40 hover:text-foreground/70 transition-colors">
+              <XIcon />
+            </button>
+          </div>
+        </div>
+        <div className="p-2">
+          {notifications.map((n) => (
+            <div
+              key={n.id}
+              className={cn(
+                "flex gap-3 p-3 rounded-xl mb-1 transition-colors cursor-pointer",
+                n.unread ? "bg-violet-500/10 hover:bg-violet-500/15" : "hover:bg-white/5"
+              )}
+            >
+              <div className={cn(
+                "w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 text-sm",
+                n.type === "success" ? "bg-emerald-500/20" :
+                n.type === "warning" ? "bg-amber-500/20" :
+                n.type === "error" ? "bg-red-500/20" : "bg-blue-500/20"
+              )}>
+                {n.type === "success" ? "✅" : n.type === "warning" ? "⚠️" : "ℹ️"}
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-start justify-between gap-1">
+                  <p className="text-sm font-semibold text-foreground">{n.title}</p>
+                  {n.unread && <div className="w-2 h-2 bg-violet-500 rounded-full flex-shrink-0 mt-1" />}
+                </div>
+                <p className="text-xs text-foreground/60 line-clamp-2">{n.msg}</p>
+                <p className="text-xs text-foreground/30 mt-1">{n.time}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </>
+  );
+}
+
+// ─── Profile Dropdown ─────────────────────────────────────────────────────────
+function ProfileDropdown({ user, onClose, onLogout, isDark }: {
+  user: ReturnType<typeof useAuth>["user"];
+  onClose: () => void;
+  onLogout: () => void;
+  isDark: boolean;
+}) {
+  return (
+    <>
+      <div className="fixed inset-0 z-40" onClick={onClose} />
+      <div className={cn(
+        "fixed top-16 right-4 z-50 w-64",
+        "glass-card rounded-2xl shadow-2xl animate-fade-down p-2",
+        isDark ? "bg-[#12122a]/95" : "bg-white/95"
+      )}>
+        <div className="p-3 mb-1">
+          <div className="flex items-center gap-3">
+            <Avatar name={user?.name || "User"} size="md" />
+            <div className="min-w-0">
+              <p className="text-sm font-bold text-foreground truncate">{user?.name}</p>
+              <p className="text-xs text-foreground/50 truncate">{user?.email}</p>
+            </div>
+          </div>
+        </div>
+        <div className="border-t border-white/10 pt-1">
+          {[
+            { icon: "👤", label: "My Profile" },
+            { icon: "📊", label: "My Results" },
+            { icon: "⚙️", label: "Settings" },
+            { icon: "❓", label: "Help & Support" },
+          ].map((item) => (
+            <button
+              key={item.label}
+              className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-white/10 transition-colors text-left"
+            >
+              <span className="text-base">{item.icon}</span>
+              <span className="text-sm text-foreground">{item.label}</span>
+            </button>
+          ))}
+          <div className="border-t border-white/10 mt-1 pt-1">
+            <button
+              onClick={() => { onLogout(); onClose(); }}
+              className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-red-500/10 text-red-400 transition-colors text-left"
+            >
+              <span className="text-base">🚪</span>
+              <span className="text-sm font-medium">Sign Out</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </>
+  );
+}
+
+// ─── Mobile Bottom Navigation ─────────────────────────────────────────────────
+function MobileBottomNav({ activeView, setActiveView, unreadCount }: {
+  activeView: View;
+  setActiveView: (v: View) => void;
+  unreadCount: number;
+}) {
+  const tabs = [
+    { id: "dashboard" as View, icon: "🏠", label: "Home" },
+    { id: "departments" as View, icon: "📚", label: "Departments" },
+    { id: "notifications" as View, icon: "🔔", label: "Alerts", badge: unreadCount },
+    { id: "profile" as View, icon: "👤", label: "Profile" },
+  ];
+
+  return (
+    <div className={cn(
+      "fixed bottom-0 left-0 right-0 z-40 md:hidden",
+      "glass-card border-t border-white/10",
+      "px-4 pt-2 pb-safe-bottom pb-4"
+    )}>
+      <div className="flex items-center justify-around">
+        {tabs.map((tab) => (
+          <button
+            key={tab.id}
+            onClick={() => setActiveView(tab.id)}
+            className={cn(
+              "relative flex flex-col items-center gap-1 px-3 py-2 rounded-xl transition-all duration-200",
+              activeView === tab.id
+                ? "text-violet-400 bg-violet-500/15"
+                : "text-foreground/50 hover:text-foreground/80"
+            )}
+          >
+            <span className="text-xl leading-none">{tab.icon}</span>
+            <span className="text-[10px] font-medium">{tab.label}</span>
+            {tab.badge && tab.badge > 0 && (
+              <span className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-red-500 rounded-full text-[9px] text-white font-bold flex items-center justify-center">
+                {tab.badge}
+              </span>
+            )}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ─── Inline icon components ───────────────────────────────────────────────────
+function SearchIcon() {
+  return (
+    <svg className="w-4 h-4 text-foreground/40 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+    </svg>
+  );
+}
+
+function XIcon() {
+  return (
+    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+    </svg>
+  );
+}
+
+function BellIcon() {
+  return (
+    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+    </svg>
+  );
+}
+
+function SunIcon() {
+  return (
+    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
+    </svg>
+  );
+}
+
+function MoonIcon() {
+  return (
+    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+    </svg>
+  );
+}
+
+function PlayIcon() {
+  return (
+    <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+      <path d="M8 5v14l11-7z" />
+    </svg>
+  );
+}
+
+function BookIcon() {
+  return (
+    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+    </svg>
+  );
+}
+
+function ChevronIcon() {
+  return (
+    <svg className="w-4 h-4 text-foreground/30" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+    </svg>
+  );
+}
