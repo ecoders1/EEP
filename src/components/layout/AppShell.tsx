@@ -7,8 +7,17 @@ import { Avatar } from "@/components/ui/Avatar";
 import { cn } from "@/lib/utils";
 import DashboardPage from "@/components/dashboard/DashboardPage";
 import DepartmentsPage from "@/components/departments/DepartmentsPage";
+import ExamPracticePage from "@/components/exam/ExamPracticePage";
+import MockTestPage from "@/components/exam/MockTestPage";
+import ResultsPage from "@/components/exam/ResultsPage";
+import { type MockExam } from "@/lib/examData";
 
-export type AppView = "home" | "departments" | "notifications" | "profile";
+export type AppView = "home" | "departments" | "notifications" | "profile" | "practice" | "mock" | "results";
+
+type ExamSession = {
+  answers: Record<string, "A" | "B" | "C" | "D">;
+  timeTaken: number;
+} | null;
 
 const NOTIFICATIONS_DATA = [
   { id: "n1", type: "info" as const, title: "New Exam Added", msg: "2024 Civil Engineering exit exam is now available.", time: "2m ago", unread: true },
@@ -18,14 +27,22 @@ const NOTIFICATIONS_DATA = [
 ];
 
 export default function AppShell() {
-  const { user, logout } = useAuth();
+  const { user, signOut } = useAuth();
   const { isDark, toggleTheme } = useTheme();
   const [activeView, setActiveView] = useState<AppView>("home");
   const [showNotifications, setShowNotifications] = useState(false);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [examSession, setExamSession] = useState<ExamSession>(null);
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const [selectedMockExam, setSelectedMockExam] = useState<MockExam | null>(null);
 
   const unreadCount = NOTIFICATIONS_DATA.filter((n) => n.unread).length;
+
+  const handleExamFinish = (answers: Record<string, "A" | "B" | "C" | "D">, timeTaken: number) => {
+    setExamSession({ answers, timeTaken });
+    setActiveView("results");
+  };
 
   return (
     <div className={cn("min-h-screen", isDark ? "dark bg-[#0a0a1a]" : "bg-slate-50")}>
@@ -37,6 +54,7 @@ export default function AppShell() {
       </div>
 
       {/* ── Top navigation bar ── */}
+      {!["practice", "mock", "results"].includes(activeView) && (
       <header className={cn(
         "fixed top-1 left-0 right-0 z-40 px-4 py-3",
         isDark ? "bg-[#0a0a1a]/85" : "bg-white/85",
@@ -134,6 +152,7 @@ export default function AppShell() {
           </div>
         </div>
       </header>
+      )}
 
       {/* ── Overlay panels ── */}
       {showNotifications && (
@@ -146,31 +165,57 @@ export default function AppShell() {
         <ProfileMenu
           user={user}
           onClose={() => setShowProfileMenu(false)}
-          onLogout={logout}
+          onLogout={signOut}
           isDark={isDark}
         />
       )}
 
       {/* ── Page content ── */}
-      <div className="pt-14">
+      <div className={cn("pt-14", (activeView === "practice" || activeView === "mock" || activeView === "results") && "pt-0")}>
         {activeView === "home" && (
           <DashboardPage
             externalSearch={searchQuery}
             onNavigateToDepartments={() => setActiveView("departments")}
+            onStartPractice={() => setActiveView("practice")}
+            onStartMock={() => setActiveView("mock")}
           />
         )}
         {activeView === "departments" && (
-          <DepartmentsPage />
+          <DepartmentsPage onStartPractice={() => setActiveView("practice")} />
+        )}
+        {activeView === "practice" && (
+          <ExamPracticePage
+            onExit={() => setActiveView("home")}
+            onFinish={handleExamFinish}
+          />
+        )}
+        {activeView === "mock" && (
+          <MockTestPage
+            onBack={() => setActiveView("home")}
+            onStartExam={(exam) => {
+              setSelectedMockExam(exam);
+              setActiveView("practice");
+            }}
+          />
+        )}
+        {activeView === "results" && examSession && (
+          <ResultsPage
+            answers={examSession.answers}
+            timeTakenSeconds={examSession.timeTaken}
+            onHome={() => setActiveView("home")}
+            onRetry={() => setActiveView("practice")}
+          />
         )}
         {activeView === "notifications" && (
           <NotificationsFullPage isDark={isDark} />
         )}
         {activeView === "profile" && (
-          <ProfileFullPage user={user} onLogout={logout} isDark={isDark} />
+          <ProfileFullPage user={user} onLogout={signOut} isDark={isDark} />
         )}
       </div>
 
       {/* ── Mobile bottom navigation ── */}
+      {!["practice", "mock", "results"].includes(activeView) && (
       <nav className={cn(
         "fixed bottom-0 left-0 right-0 z-40 md:hidden",
         isDark ? "bg-[#0d0d20]/90 border-white/5" : "bg-white/90 border-gray-200/80",
@@ -204,6 +249,7 @@ export default function AppShell() {
           ))}
         </div>
       </nav>
+      )}
     </div>
   );
 }

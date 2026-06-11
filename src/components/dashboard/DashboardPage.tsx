@@ -36,9 +36,11 @@ const STATS = [
 interface DashboardPageProps {
   externalSearch?: string;
   onNavigateToDepartments?: () => void;
+  onStartPractice?: () => void;
+  onStartMock?: () => void;
 }
 
-export default function DashboardPage({ externalSearch = "", onNavigateToDepartments }: DashboardPageProps) {
+export default function DashboardPage({ externalSearch = "", onNavigateToDepartments, onStartPractice, onStartMock }: DashboardPageProps) {
   const { user } = useAuth();
   const { isDark } = useTheme();
 
@@ -89,11 +91,11 @@ export default function DashboardPage({ externalSearch = "", onNavigateToDepartm
                 )}
               </div>
               <div className="flex flex-col gap-3">
-                <Button variant="glass" size="md" className="text-white border-white/30 hover:bg-white/20 min-w-[160px]" icon={<PlayIcon />}>
+                <Button variant="glass" size="md" className="text-white border-white/30 hover:bg-white/20 min-w-[160px]" icon={<PlayIcon />} onClick={onStartPractice}>
                   Start Practice
                 </Button>
-                <Button variant="glass" size="md" className="text-white border-white/30 hover:bg-white/20" icon={<BookIcon />} onClick={onNavigateToDepartments}>
-                  Browse Exams
+                <Button variant="glass" size="md" className="text-white border-white/30 hover:bg-white/20" icon={<BookIcon />} onClick={onStartMock}>
+                  Mock Tests
                 </Button>
               </div>
             </div>
